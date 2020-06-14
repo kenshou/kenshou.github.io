@@ -88,8 +88,50 @@
     
     <div class="article-entry" itemprop="articleBody">
       
-        <p>seata源码解析</p>
+        <h1 id="前言"><a href="#前言" class="headerlink" title="前言"></a>前言</h1><p><a href="https://seata.io/zh-cn/" target="_blank" rel="noopener">seata</a>作为阿里提供的微服务下的分布式事务解决方案，虽然现在不算完全成熟，但作为一个阿里巴巴提供的框架肯定值得借鉴（我等小白也就只有装B说下借鉴）。本文主要分析它的<a href="https://seata.io/zh-cn/docs/overview/what-is-seata.html" target="_blank" rel="noopener">AT模式</a>。因本人小白所以写的也有点杂乱。（算了，反正也没有其他人看）  </p>
+<h2 id="前置姿势"><a href="#前置姿势" class="headerlink" title="前置姿势"></a>前置姿势</h2><ul>
+<li><p><a href="https://blog.csdn.net/lvoyee/article/details/82017057" target="_blank" rel="noopener">spring.factories</a>： Spring Boot中有一种非常解耦的扩展机制：Spring Factories。这种扩展机制实际上是仿照Java中的SPI扩展机制来实现的。它在META-INF/spring.factories文件中配置接口的实现类名称，spring会自动加载这个配置文件中的bean。seata中用来加载所有的他所需要的config bean</p>
+</li>
+<li><p><a href="https://blog.csdn.net/shuangyue/article/details/8633264" target="_blank" rel="noopener">AbstractAutoProxyCreator</a>: 用于加入动态代理，seata对有全局事务注解的方法对象添加动态代理</p>
+</li>
+<li><p><a href="https://blog.csdn.net/fyedu/article/details/94133986" target="_blank" rel="noopener">InitializingBean接口</a>:</p>
+</li>
+<li><p><a href="https://www.jianshu.com/p/7b8f2a97c8f5" target="_blank" rel="noopener">SmartLifecycle</a>：创建netty的时候放到springboot中来进行管理</p>
+<h1 id="正文"><a href="#正文" class="headerlink" title="正文"></a>正文</h1><p>在源码中seata-spring-boot-starter这个module编写了客户端的同spring的整合。<br>META-INF/spring.factories定义  </p>
+<p>  org.springframework.boot.autoconfigure.EnableAutoConfiguration=io.seata.spring.boot.autoconfigure.SeataAutoConfiguration<br>这里引入SeataAutoConfiguration来加载seata所需要的bean</p>
+</li>
+</ul>
+<p>在SeataAutoConfiguration中有个方法就是导出<strong>GlobalTransactionScanner</strong>，这个bean就是负责给添加有全局事务注解的对象生成动态代理</p>
+<pre><code>@Bean
+@DependsOn({BEAN_NAME_SPRING_APPLICATION_CONTEXT_PROVIDER, BEAN_NAME_FAILURE_HANDLER})
+@ConditionalOnMissingBean(GlobalTransactionScanner.class)
+public GlobalTransactionScanner globalTransactionScanner(SeataProperties seataProperties, FailureHandler failureHandler) {
+    if (LOGGER.isInfoEnabled()) {
+        LOGGER.info(&quot;Automatically configure Seata&quot;);
+    }
+    return new GlobalTransactionScanner(seataProperties.getApplicationId(), seataProperties.getTxServiceGroup(), failureHandler);
+}</code></pre><p><strong>GlobalTransactionScanner</strong>继承<strong>AbstractAutoProxyCreator</strong>并实现<strong>InitializingBean</strong>接口</p>
+<pre><code>public class GlobalTransactionScanner extends AbstractAutoProxyCreator
+implements InitializingBean, ApplicationContextAware,
+DisposableBean {
+    ……
+    @Override
+    protected Object wrapIfNecessary(Object bean, String beanName, Object cacheKey) {
+        //判断对象是否有方法有全局注解，有则加入动态代理
+    }
 
+     @Override
+    public void afterPropertiesSet() {
+        //注释化客户端
+        if (disableGlobalTransaction) {
+            if (LOGGER.isInfoEnabled()) {
+                LOGGER.info(&quot;Global transaction is disabled.&quot;);
+            }
+            return;
+        }
+        initClient();
+    }
+}</code></pre>
       
     </div>
     <footer class="article-footer">
